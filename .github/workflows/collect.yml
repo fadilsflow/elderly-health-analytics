@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  BATCH_ID: ${{ format('{0}{1:02d}{2:02d}', github.run_number, github.run_attempt, github.run_id) }}
+  BATCH_ID: run_${{ github.run_id }}
 
 jobs:
   collect-who:
