@@ -186,6 +186,11 @@ class YouTubeCollector(BaseCollector):
                         sentiment=sent_label,
                         sentiment_score=sent_score,
                         notes=f"YouTube {record.get('_channel', '')} — Sentimen: {sent_label} ({sent_score:+.2f}) | {title[:100]}",
+                        metadata_extra={
+                            "video_id": record.get("_video_id"),
+                            "channel": record.get("_channel"),
+                            "title": title[:200],
+                        },
                     )
                 )
             except Exception as e:

@@ -34,6 +34,7 @@ Persyaratan:
 ================================================================================
 """
 
+import argparse
 import json
 import os
 import sys
@@ -71,9 +72,12 @@ COLLECTORS = {
 # Orchestrator
 # =============================================================================
 
-def run_collection() -> Dict[str, List[Dict]]:
+def run_collection(source_filter: str = None) -> Dict[str, List[Dict]]:
     """
-    Menjalankan seluruh pipeline data collection.
+    Menjalankan pipeline data collection.
+
+    Args:
+        source_filter: Nama source yg ingin di-run (None = semua)
 
     Returns:
         Dict[str, List[Dict]]: Mapping nama_collector -> list data normalized
@@ -89,7 +93,14 @@ def run_collection() -> Dict[str, List[Dict]]:
     total_error = 0
     start_time = time.time()
 
-    for name, CollectorClass in COLLECTORS.items():
+    collectors_to_run = COLLECTORS.items()
+    if source_filter:
+        collectors_to_run = [(k, v) for k, v in collectors_to_run if k == source_filter]
+        if not collectors_to_run:
+            logger.warning(f"Source '{source_filter}' tidak ditemukan. Pilihan: {list(COLLECTORS.keys())}")
+            return results
+
+    for name, CollectorClass in collectors_to_run:
         logger.info(f"\n{'─' * 50}")
         logger.info(f"Memproses: {name}")
 
@@ -174,14 +185,25 @@ def save_summary(results: Dict[str, List[Dict]]) -> str:
 # =============================================================================
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Data Collection — Analisis Lansia")
+    parser.add_argument(
+        "--source", "-s",
+        choices=["WHO", "Google Trends", "YouTube", "all"],
+        default="all",
+        help="Run specific collector only (default: all)",
+    )
+    args = parser.parse_args()
+
     logger = setup_logger("main")
 
     try:
         logger.info("Memulai sistem analisis popularitas topik lansia...")
         logger.info(f"Output directory: {OUTPUT_DIR}")
+        logger.info(f"Source filter: {args.source}")
 
         # Jalankan collection
-        results = run_collection()
+        source_filter = None if args.source == "all" else args.source
+        results = run_collection(source_filter=source_filter)
 
         # Simpan summary gabungan
         summary_path = save_summary(results)
@@ -193,7 +215,7 @@ if __name__ == "__main__":
         for f in sorted(os.listdir(OUTPUT_DIR)):
             fpath = os.path.join(OUTPUT_DIR, f)
             size_kb = os.path.getsize(fpath) / 1024
-            logger.info(f"  • {f} ({size_kb:.1f} KB)")
+            logger.info(f"  \u2022 {f} ({size_kb:.1f} KB)")
         logger.info("=" * 70)
 
     except KeyboardInterrupt:

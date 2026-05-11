@@ -1,0 +1,101 @@
+name: Big Data Collection
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  BATCH_ID: ${{ format('{0}{1:02d}{2:02d}', github.run_number, github.run_attempt, github.run_id) }}
+
+jobs:
+  collect-who:
+    name: WHO Data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python collect.py --source WHO
+      - name: Store to MongoDB
+        run: python store_to_mongo.py --source WHO --batch-id ${{ env.BATCH_ID }}
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: who-data
+          path: output/who_health_data.json
+          retention-days: 30
+
+  collect-youtube:
+    name: YouTube Data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python collect.py --source YouTube
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      - name: Store to MongoDB
+        run: python store_to_mongo.py --source YouTube --batch-id ${{ env.BATCH_ID }}
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youtube-data
+          path: output/youtube_health_data.json
+          retention-days: 30
+
+  collect-trends:
+    name: Google Trends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - run: python collect.py --source "Google Trends"
+      - name: Store to MongoDB
+        run: python store_to_mongo.py --source "Google Trends" --batch-id ${{ env.BATCH_ID }}
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trends-data
+          path: output/googletrends_health_data.json
+          retention-days: 30
+
+  finalize:
+    name: Log Run Summary
+    needs: [collect-who, collect-youtube, collect-trends]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pymongo[srv] python-dotenv certifi
+      - name: Log run to MongoDB
+        run: python store_to_mongo.py --log-run --batch-id ${{ env.BATCH_ID }}
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+      - name: Write job summary
+        run: |
+          echo "## ✅ Daily Big Data Collection Complete" >> $GITHUB_STEP_SUMMARY
+          echo "| Source | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| WHO | ${{ needs.collect-who.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| YouTube | ${{ needs.collect-youtube.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Google Trends | ${{ needs.collect-trends.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Batch ID: ${{ env.BATCH_ID }}" >> $GITHUB_STEP_SUMMARY

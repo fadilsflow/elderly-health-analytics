@@ -52,6 +52,7 @@ class Normalizer:
         sex: str = None,
         unit: str = None,
         indicator_code: str = None,
+        metadata_extra: dict = None,
     ) -> Dict:
         """
         Membuat record normal sesuai schema standar v2.
@@ -73,6 +74,7 @@ class Normalizer:
             sex: (backward compat) Jenis kelamin
             unit: (backward compat) Satuan nilai
             indicator_code: (backward compat) Kode indikator
+            metadata_extra: Dict tambahan yg di-merge ke metadata
 
         Returns:
             Dict dengan schema standar
@@ -108,6 +110,8 @@ class Normalizer:
             record["sex"] = sex
         if indicator_code:
             record["metadata"]["indicator_code"] = indicator_code
+        if metadata_extra:
+            record["metadata"].update(metadata_extra)
 
         return record
 
