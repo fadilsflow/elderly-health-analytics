@@ -71,7 +71,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: trends-data
-          path: output/googletrends_health_data.json
+          path: output/google_trends_health_data.json
           retention-days: 30
 
   finalize:

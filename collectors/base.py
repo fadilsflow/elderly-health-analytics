@@ -115,7 +115,7 @@ class BaseCollector(ABC):
             str: Path lengkap file yang disimpan
         """
         if filename is None:
-            filename = f"{self.name.lower().replace('.', '_')}_health_data.json"
+            filename = f"{self.name.lower().replace('.', '_').replace(' ', '_')}_health_data.json"
 
         filepath = os.path.join(self.output_dir, filename)
 

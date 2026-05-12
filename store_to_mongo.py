@@ -62,7 +62,7 @@ def get_output_file(source: str) -> str:
     """Cari file JSON output untuk source tertentu."""
     source_to_file = {
         "WHO": "who_health_data.json",
-        "Google Trends": "googletrends_health_data.json",
+        "Google Trends": "google_trends_health_data.json",
         "YouTube": "youtube_health_data.json",
     }
     filename = source_to_file.get(source)
