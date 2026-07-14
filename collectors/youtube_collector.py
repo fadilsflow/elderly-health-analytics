@@ -190,6 +190,9 @@ class YouTubeCollector(BaseCollector):
                             "video_id": record.get("_video_id"),
                             "channel": record.get("_channel"),
                             "title": title[:200],
+                            "views": views,
+                            "likes": likes,
+                            "comments": comments,
                         },
                     )
                 )

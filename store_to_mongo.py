@@ -5,7 +5,7 @@ store_to_mongo.py — Simpan data collection ke MongoDB Atlas (Big Data mode).
 Strategi per source:
   WHO            → Upsert  (key: indicator_code + timestamp + sex)
   Google Trends  → Upsert  (key: keyword + timestamp)
-  YouTube        → Append  (insert with batch_id, simpan semua snapshot)
+  YouTube        → Upsert  (key: video_id + snapshot_date)
 
 Cara Pakai:
     export MONGO_URI="mongodb+srv://..."
@@ -37,10 +37,10 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
 
 # Strategi per source
 UPSERT_KEYS: Dict[str, List[str]] = {
-    "WHO": ["indicator_code", "timestamp", "sex"],
-    "Google Trends": ["keyword", "timestamp"],
+    "WHO": ["source", "indicator_code", "timestamp", "sex"],
+    "Google Trends": ["source", "keyword", "timestamp", "region"],
+    "YouTube": ["source", "video_id", "snapshot_date"],
 }
-APPEND_SOURCES = {"YouTube"}
 
 
 def connect():
@@ -81,7 +81,7 @@ def load_records_from_file(filepath: str, source: str, batch_id: str) -> list[di
     with open(filepath, "r", encoding="utf-8") as f:
         records = json.load(f)
 
-    docs = []
+    snapshot_date = datetime.now(timezone.utc).date().isoformat()
     result_docs = []
     for idx, rec in enumerate(records):
         metadata = rec.get("metadata", {}) or {}
@@ -101,11 +101,12 @@ def load_records_from_file(filepath: str, source: str, batch_id: str) -> list[di
             "age_group": rec.get("age_group"),
             "sex": rec.get("sex"),
             "batch_id": batch_id,
+            "snapshot_date": snapshot_date,
             "collected_at": datetime.now(timezone.utc).isoformat(),
         }
-        # Extra metadata fields (video_id, channel, title dari YouTube)
-        for extra_field in ("video_id", "channel", "title"):
-            if metadata.get(extra_field):
+        # Extra metadata fields dari YouTube. Nilai 0 tetap harus disimpan.
+        for extra_field in ("video_id", "channel", "title", "views", "likes", "comments"):
+            if metadata.get(extra_field) is not None:
                 doc[extra_field] = metadata[extra_field]
         # Hapus field None untuk menjaga kebersihan dokumen
         doc = {k: v for k, v in doc.items() if v is not None}
@@ -232,10 +233,7 @@ def store_source(source: str, batch_id: str):
     db = client[DB_NAME]
     collection = db[COLLECTION_NAME]
 
-    if source in APPEND_SOURCES:
-        inserted, errors = append_source(collection, docs)
-        print(f"   Inserted: {inserted}, Errors: {errors}")
-    elif source in UPSERT_KEYS:
+    if source in UPSERT_KEYS:
         upserted, errors = upsert_source(collection, docs, UPSERT_KEYS[source])
         print(f"   Upserted: {upserted}, Errors: {errors}")
     else:

@@ -5,9 +5,15 @@ db = db.getSiblingDB("elderly_analysis");
 
 print("Setting up indexes for elderly_data...");
 
+// Hapus versi lama agar script aman dijalankan ulang setelah perubahan schema.
+const existingIndexNames = db.elderly_data.getIndexes().map((index) => index.name);
+for (const name of ["idx_who_upsert", "idx_trends_upsert", "idx_youtube_video_batch", "idx_source_keyword_time"]) {
+  if (existingIndexNames.includes(name)) db.elderly_data.dropIndex(name);
+}
+
 // Upsert key untuk WHO: indicator_code + timestamp + sex (unique in source)
 db.elderly_data.createIndex(
-  { indicator_code: 1, timestamp: 1, sex: 1 },
+  { source: 1, indicator_code: 1, timestamp: 1, sex: 1 },
   {
     unique: true,
     partialFilterExpression: { source: "WHO" },
@@ -17,7 +23,7 @@ db.elderly_data.createIndex(
 
 // Upsert key untuk Google Trends: keyword + timestamp (unique in source)
 db.elderly_data.createIndex(
-  { keyword: 1, timestamp: 1 },
+  { source: 1, keyword: 1, timestamp: 1, region: 1 },
   {
     unique: true,
     partialFilterExpression: { source: "Google Trends" },
@@ -25,11 +31,12 @@ db.elderly_data.createIndex(
   }
 );
 
-// Query YouTube by video_id + batch_id
+// Satu snapshot per video per hari; rerun workflow tidak membuat duplikat.
 db.elderly_data.createIndex(
-  { video_id: 1, batch_id: -1 },
+  { source: 1, video_id: 1, snapshot_date: 1 },
   {
-    partialFilterExpression: { video_id: { $exists: true } },
+    unique: true,
+    partialFilterExpression: { source: "YouTube", snapshot_date: { $exists: true } },
     name: "idx_youtube_video_batch",
   }
 );
@@ -38,6 +45,12 @@ db.elderly_data.createIndex(
 db.elderly_data.createIndex(
   { source: 1, keyword: 1, timestamp: -1 },
   { name: "idx_source_keyword_time" }
+);
+
+// Ambil batch/snapshot terbaru tanpa scan seluruh histori.
+db.elderly_data.createIndex(
+  { source: 1, snapshot_date: -1, collected_at: -1 },
+  { name: "idx_source_snapshot" }
 );
 
 // Traceability by batch_id

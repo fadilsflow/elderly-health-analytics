@@ -2,15 +2,29 @@ name: Big Data Collection
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '17 2 * * *'
   workflow_dispatch:
 
 env:
   BATCH_ID: run_${{ github.run_id }}
 
 jobs:
+  setup-indexes:
+    name: Prepare MongoDB indexes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pymongo[srv] python-dotenv certifi
+      - run: python scripts/setup_indexes.py
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+
   collect-who:
     name: WHO Data
+    needs: setup-indexes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +46,7 @@ jobs:
 
   collect-youtube:
     name: YouTube Data
+    needs: setup-indexes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +70,7 @@ jobs:
 
   collect-trends:
     name: Google Trends
+    needs: setup-indexes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,3 +115,14 @@ jobs:
           echo "| Google Trends | ${{ needs.collect-trends.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Batch ID: ${{ env.BATCH_ID }}" >> $GITHUB_STEP_SUMMARY
+      - name: Trigger Vercel production deployment
+        if: ${{ needs.collect-who.result == 'success' || needs.collect-youtube.result == 'success' || needs.collect-trends.result == 'success' }}
+        env:
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK_URL" ]; then
+            echo "::warning::VERCEL_DEPLOY_HOOK_URL belum dikonfigurasi; dashboard tidak di-deploy."
+            exit 0
+          fi
+          curl --fail-with-body --retry 3 --retry-all-errors \
+            --request POST "$VERCEL_DEPLOY_HOOK_URL"
